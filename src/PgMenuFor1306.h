@@ -1,6 +1,9 @@
 
 //#include "PgMenuFor1306.h"
-
+/*
+#include "PgMenuFor1306.h"
+    Copyright (c) 2024-2025 ,plusg Makoto kuwabara
+*/
 #ifndef PgMENUFOR1306_H
 #define PgMENUFOR1306_H
 
@@ -12,6 +15,9 @@
 
 //必要な初期化(static)　https://qiita.com/omuRice/items/3c40e8dde19e276ccacf
 
+unsigned int MenuPage::menulife = 10000;
+unsigned long MenuPage::prevtime = -10000;
+MenuPage* MenuPage::firstPage =NULL;
 MenuItem* MenuPage::editItem = NULL;
 int MenuPage::editLeft = 5;
 int MenuPage::editTop = 0;
@@ -25,6 +31,7 @@ int MenuPage::menu_height = 55;
 int MenuPage::menu_disptop = 0;
 int MenuPage::CharW = 6;
 int MenuPage::CharH = 10;
+bool MenuPage::live=false;
 
 //中身の描画
 void MenuPage::drawEditMenu() {
@@ -33,14 +40,15 @@ void MenuPage::drawEditMenu() {
 
     //editTop   //editHeight = ;;;
     //編集中 print///////////////////////////////////////////////////////////////////////////////////////////
-    if (editItem->type == NUM) {
+    if (editItem->type == NUM || editItem->type == SHORTNUM) {
       //中身の描画
       char cstr[16];
       sprintf(cstr, "%6d", editvalue);
-      display.setCursor(editLeft + 3, editTop + 5);
+
+      display.setCursor(editLeft+ editWidth -7*CharW + 3, editTop + 5);
       display.print(cstr);
       //選択している桁のカーソル表示
-      display.fillRect(editLeft + (5 - edititem_col) * CharW + 2, editTop + 3, CharW + 1, CharH + 1, SSD1306_INVERSE);
+      display.fillRect(editLeft + editWidth + (-2 - edititem_col) * CharW + 2, editTop + 3, CharW + 1, CharH + 1, SSD1306_INVERSE);
     }
     ////////////////////////////////////////////////////////////////////////////////////////////////////////
     if (editItem->type == CHECK) {
@@ -109,9 +117,12 @@ void MenuPage::drawMenuWindow(int x, int y, int w, int h) {
   display.fillRoundRect(x, y, w, h, 2, SSD1306_BLACK);
   display.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 2, SSD1306_WHITE);
 }
+void MenuPage::clearMenuWindow() {
+  display.fillRoundRect(MenuPage::menu_left, MenuPage::menu_top, MenuPage::menu_width, MenuPage::menu_height, 2, SSD1306_BLACK);
+}
 //描画終了（表示更新）
 void MenuPage::menuDisplay() {
-  display.display();
+//  display.display();
 }
 // //MenuItemの描画 (1行)
 // typedef enum mENUTYPE {
@@ -137,12 +148,6 @@ void MenuPage::printItem(int x, int y, int w, int h, String text, byte selState)
     display.drawRoundRect(x + 2, y + 1, w - 4, h, 3, SSD1306_INVERSE);
   }
 }
-
-
-
-
-
-
 
 
 

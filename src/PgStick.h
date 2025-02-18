@@ -37,9 +37,10 @@ private:
   unsigned long releaseTime = 0;
   
   bool state_holdup = false;
-  bool PushP;
-  bool PushM;  
 public:
+    bool PushP;
+  bool PushM;  
+
 bool state_hold = false;
   int clicktime = 300;
   int dblclicktime = 100;
@@ -59,7 +60,8 @@ bool state_hold = false;
   bool Hold() {
     return state_holdup;
   }
-  void update() {
+  int update() {
+      int heartbeat = 0;
     state_click = state_dblclick = false;
     state_holdup = false;
     unsigned long now = millis();
@@ -77,6 +79,7 @@ bool state_hold = false;
     }
 
     if ((PushP || PushM) != stateprev) {
+        heartbeat = 1;
       if ((PushP || PushM)) {//push
         if (state == 0) {
           pushTime = now;
@@ -107,6 +110,9 @@ bool state_hold = false;
       }
     }
     stateprev = PushP || PushM;
+
+    return (int)stateprev;
+
   }
 };
 

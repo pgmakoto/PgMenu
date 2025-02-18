@@ -39,7 +39,9 @@ private:
     const int clicktime = 300;
   const int dblclicktime = 600;
 public:
-
+    bool down() {
+        return stateprev;
+  }
   PgButton( const uint8_t cs) : dev_(cs){
     pinMode(dev_, INPUT_PULLUP);
   }

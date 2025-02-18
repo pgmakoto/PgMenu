@@ -1,6 +1,7 @@
-
-//#include "PgMenu.h"
-
+/*
+#include "PgMenu.h"
+    Copyright (c) 2024-2025 ,plusg Makoto kuwabara
+*/
 #ifndef PgMENU_H
 #define PgMENU_H
 
@@ -19,6 +20,8 @@ bool editbool;          //ブール設定用
 typedef enum mENUTYPE {
   DOCOMMAND,
   NUM,
+  SHORTNUM,
+  FNUM,
   SELECT,
   CHECK,
   PAGE,
@@ -40,6 +43,10 @@ public:
   int itemnum = 0;   //アイテム数
   MenuItem* items;   //アイテムのリストが入る
   int value = 0;     //
+  static MenuPage* firstPage;
+  static unsigned long prevtime;
+  static unsigned int menulife;
+  static bool live;
 
   static MenuPage* menucurpage;
   //エディット用サブ画面
@@ -64,6 +71,7 @@ public:
     CharH = height;
     adjustDisp();
   }
+
   static void setRect(int x, int y, int width, int height) {
     menu_left = x;
     menu_top = y;
@@ -71,6 +79,7 @@ public:
     menu_height = height;
     adjustDisp();
   }
+
   static void adjustDisp() {
     int menuItemBottom = menucurpage->itemnum * CharH + 5;
     if (menuItemBottom < menu_disptop + menu_height) menu_disptop--;
@@ -82,6 +91,22 @@ public:
   // MenuPage(const MenuPage &q) : parentPage(q.parentPage), items(q.items), itemnum(q.itemnum) {}
   MenuPage() {}
   MenuPage(MenuItem* _items);
+
+  static void wakeUp() {
+      prevtime = millis();
+	  MenuPage::live=true;
+      MenuPage::editItem = NULL;
+
+      while (MenuPage::menucurpage->parentPage != NULL) {
+          MenuPage* parentmenupage = MenuPage::menucurpage->parentPage;
+
+          delete MenuPage::menucurpage;
+          MenuPage::menucurpage = parentmenupage;  //戻る位置を復元
+      }
+  }
+  static bool isSleep() {
+	  return !MenuPage::live;
+  }
   void begin(MenuItem* _items);
   // const MenuPage operator*(const MenuPage &q) const { return MenuPage(*this) *= q; }
 
@@ -89,7 +114,7 @@ public:
   static void drawMenu(void);
   static void drawEditMenu(void);
   static void drawMenuWindow(int x, int y, int w, int h);
-
+  static void clearMenuWindow();
   static void printItem(int left, int y, int w, int h, String text, byte selState);
   static void menuDisplay();
   static void drawSelectItems(MenuItem* items);
@@ -108,9 +133,19 @@ public:
     type = _type;
   }
   MenuItem(String _text, int* _num) {
-    text = _text;
-    type = NUM;
-    command = _num;
+      text = _text;
+      type = NUM;
+      command = _num;
+  }
+  MenuItem(String _text, short* _num) {
+      text = _text;
+      type = SHORTNUM;
+      command = _num;
+  }
+  MenuItem(String _text, float* _num) {
+      text = _text;
+      type = FNUM;
+      command = _num;
   }
   MenuItem(String _text, bool* _chk) {
     text = _text;
@@ -150,6 +185,7 @@ public:
 
 
 MenuPage::MenuPage(MenuItem* _items) {
+  firstPage = this;
   items = _items;
   int i = 0;
   for (i = 0; i < 20; i++) {
@@ -159,6 +195,7 @@ MenuPage::MenuPage(MenuItem* _items) {
 }
 
 void MenuPage::begin(MenuItem* _items) {
+  firstPage = this;
   items = _items;
   int i = 0;
   for (i = 0; i < 20; i++) {
@@ -172,15 +209,24 @@ void MenuItem::push() {
     if (command != NULL) {
       (void)(*((MenuCommand)command))();
     }
-  } else if (type == NUM) {
-    //Edit mode
-    if (MenuPage::editItem == NULL) {
-      MenuPage::editItem = this;
-      editvalue = *(int*)command;
-    }
-  } else if (type == SELECT) {  //サブページにするべき
-                                //Edit mode
+  }
+  else if (type == NUM) {
+      //Edit mode
+      if (MenuPage::editItem == NULL) {
+          MenuPage::editItem = this;
+          editvalue = *(int*)command;
+      }
+  }
 
+  else if (type == SHORTNUM) {
+      //Edit mode
+      if (MenuPage::editItem == NULL) {
+          MenuPage::editItem = this;
+          editvalue = *(short*)command;
+      }
+  }
+ else if (type == SELECT) {  //サブページにするべき
+                                //Edit mode
     MenuPage* newmenucurpage = new MenuPage((MenuItem*)command);  //新しく表示を行うメニュー itemlist
     newmenucurpage->parentPage = MenuPage::menucurpage;           //戻る位置を保存
     MenuPage::menucurpage = newmenucurpage;
@@ -212,7 +258,7 @@ void MenuItem::push() {
 }
 
 void MenuItem::back() {
-  if (MenuPage::editItem != NULL) {  //Sub Menu から戻る
+  if (MenuPage::editItem != NULL) {  //編集中の場合はキャンセル扱い
     MenuPage::editItem = NULL;
     return;
   }
@@ -220,7 +266,10 @@ void MenuItem::back() {
   MenuPage* parentmenupage = MenuPage::menucurpage->parentPage;  //   (MenuPage*)command;
 
   if (type == DOCOMMAND) {
-  } else if (type == NUM) {
+  }
+  else if (type == NUM) {
+  }
+  else if (type == SHORTNUM) {
   } else if (type == SELECT) {
   } else if (type == CHECK) {
   } else if (type == PAGE) {
@@ -228,7 +277,12 @@ void MenuItem::back() {
 
   if (parentmenupage != NULL) {
     delete MenuPage::menucurpage;
-    MenuPage::menucurpage = parentmenupage;  //戻る位置を保存
+    MenuPage::menucurpage = parentmenupage;  //戻る位置を復元
+  }
+  else {
+      //メニューの終了
+      MenuPage::prevtime = millis() - MenuPage::menulife;
+	  
   }
 }
 /*
@@ -247,8 +301,29 @@ void MenuPage::update() {
   //        up  Y+ (prev)
   //(back)left X- X+ right(set)
   //       down Y- (next)
-  X->update();  //PgStick
-  Y->update();
+
+
+    int res = X->update();
+    res += Y->update();
+    // 
+    //PgStick auto sleep
+    unsigned long now = millis();
+    if (!MenuPage::live ) {
+        if (X->Hold()) {
+            wakeUp();
+        }
+		return;
+    }
+	else if(now - prevtime > menulife){
+		MenuPage::live=false;
+		MenuPage::clearMenuWindow(); 
+		return;
+	}
+    else if (res) {
+        prevtime = now; 
+    }
+	
+	
 
   if (editItem != NULL && (editItem->type != SELECT)) {  //SELECTはメニューのデフォルト機能を使用
     //数値入力編集中 print///////////////////////////////////////////////////////////////////////////////////////////
@@ -259,7 +334,7 @@ void MenuPage::update() {
           *(int*)(editItem->command) = editvalue;
         }
         editItem = NULL;
-        return;
+        return ;
       }
       if (X->Click()) {
         if (!X->dir) {
@@ -278,6 +353,34 @@ void MenuPage::update() {
       editWidth = CharW * 6 + 7;
       editHeight = CharH + 7;
     }
+    if (editItem->type == SHORTNUM) {
+        //桁の選択
+        if (X->Hold()) {
+            if (X->dir) {
+                *(short*)(editItem->command) = (short)editvalue;
+            }
+            editItem = NULL;
+            return ;
+        }
+        if (X->Click()) {
+            if (!X->dir) {
+                if (edititem_col < 4) edititem_col++;
+            }
+            else {
+                if (edititem_col > 0) edititem_col--;
+            }
+        }
+        if (Y->Click()) {
+            if (!Y->dir) {
+                editvalue -= pow(10, edititem_col);
+            }
+            else {
+                editvalue += pow(10, edititem_col);
+            }
+        }
+        editWidth = CharW * 6 + 7;
+        editHeight = CharH + 7;
+    }
     ///チェック入力　/////////////////////////////////////////////////////////////////////////////////////////////////////
     if (editItem->type == CHECK) {
       if (X->Hold()) {
@@ -285,11 +388,11 @@ void MenuPage::update() {
           *(bool*)(editItem->command) = editbool;
         }
         editItem = NULL;
-        return;
+        return ;
       }
       if (X->Click() && (!X->dir)) {
         editItem = NULL;
-        return;
+        return ;
       }
       if (Y->Click()) {
         editbool = Y->dir;
@@ -311,7 +414,7 @@ void MenuPage::update() {
     drawEditMenu();
     //描画終了
     menuDisplay();
-    return;
+    return ;
   }
 
   //--------------------------------------------------------
@@ -355,13 +458,22 @@ void MenuPage::update() {
         strItem = "(";
         strItem += String(item->text);
         strItem += ")";
-      } else if (item->type == NUM) {
-        strItem = " ";
-        strItem += String(item->text);
-        strContent = "=";
-        int numeric = *(int*)item->command;
-        strContent += String(numeric);
-      } else if (item->type == SELECT) {
+      }
+      else if (item->type == NUM) {
+          strItem = " ";
+          strItem += String(item->text);
+          strContent = "=";
+          int numeric = *(int*)item->command;
+          strContent += String(numeric);
+      }
+      else if (item->type == SHORTNUM) {
+          strItem = " ";
+          strItem += String(item->text);
+          strContent = "=";
+          short numeric = *(short*)item->command;
+          strContent += String(numeric);
+      }
+      else if (item->type == SELECT) {
         strItem = " ";
         strItem += String(item->text);
         strItem += "=";
