@@ -1,2 +1,2 @@
 # PgMenu
-Arduino library to Menu
+Arduino Menu library with analog stick
